@@ -10,20 +10,6 @@ times 33 db 0 ; because some bioses temper data so we are just creating fake one
 start:
     jmp 0x7c0:step2
 
-handle_zero:
-    mov ah, 0eh
-    mov al, 'A'
-    mov bx, 0x00
-    int 0x10
-    iret ; return from interrupt
-
-handle_one:
-    mov ah, 0eh
-    mov al, 'V'
-    mov bx, 0x00
-    int 0x10
-    iret ; return from interrupt
-
 step2:
     cli ; Clear Interrupts
     mov ax, 0x7c0
@@ -32,20 +18,23 @@ step2:
     mov ax, 0x00
     mov ss, ax
     mov sp, 0x7c00
-    sti ; Enables Interrupts
 
-    mov word[ss:0x00], handle_zero
-    mov word[ss:0x02], 0x7c0
+    ; setting registers so the interrupt 13 can read from hard disk
+    mov ah, 2 ; read sector command
+    mov al, 1 ; one sector to read
+    mov ch, 0 ; cylinder low eight bits
+    mov cl, 2 ; read secotow two
+    mov dh, 0 ; head number
+    mov bx, buffer
+    int 0x13
+    jc error
 
-    mov word[ss:0x04], handle_one
-    mov word[ss:0x06], 0x7c0
+    mov si, buffer
+    call print
+    jmp $
 
-    int 1 ; triggers interrput one
-
-    mov ax, 0x00
-    div ax ; divided (0/0), this will trigger interrput 0x0
-
-    mov si, message
+error:
+    mov si, error_message
     call print
     jmp $
 
@@ -66,10 +55,12 @@ print_char:
     int 0x10
     ret
 
-message: db 'Hello World!', 0
+error_message: db 'Failed to load sector', 0
 
 ; we need to fill atleast 510 bytes of data
 ; so basically it's like padding with 0 to fill to the 510 bytes
 times 510-($ - $$) db 0
 ; put this signature word
 dw 0xAA55 
+
+buffer:
